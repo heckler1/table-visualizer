@@ -7,6 +7,7 @@ A professional-grade interactive 3D surface-plot visualizer for up to **8 × 16�
 - **Multi-Tab Interface**:
   - **Visualize Tab**: See all your tables rendered as interactive 3D surfaces in a shared coordinate system.
   - **Revise Tab**: Modify existing tables using percentage-based modifiers. Apply changes to single tables with full visual feedback.
+  - **3D Comparison View**: Toggle "Show 3D Comparison" in the Revise tab to see the **Old** (source) and **New** (output) heatmaps overlaid in 3D.
 - **Interactive 16×16 Grids**: All data entry uses real-time editable grids with built-in **Heatmap Gradients**. Cells change color based on their relative values.
 - **Table Quick-Actions**:
   - **Copy (📋)**: Instantly copies table data in TSV format, formatted to 3 decimal places for perfect spreadsheet integration.
@@ -20,7 +21,10 @@ A professional-grade interactive 3D surface-plot visualizer for up to **8 × 16�
   - **Mesh Heatmaps**: Optional vertex-colored gradients on 3D meshes that match the 2D grid's heatmap.
   - **3-Decimal Precision**: Strict enforcement of 3 decimal places (e.g., `10.500`) for all values in the UI and clipboard.
   - **Configurable Axes**: Fully customized X, Y, and Z labels, units, and precise tick values.
-- **Persistent State**: Your tables, axis configurations, revision settings, and visualization preferences (like mesh gradients) are automatically saved to local storage.
+- **Enhanced Persistence**: Your tables, axis configurations, revision settings, visualization preferences, and even your **active tab** are automatically saved across refreshes.
+- **Divergence Highlighting**:
+  - **Vertical Pillars**: Interactive 3D spikes connect the "Old" and "New" surfaces in Revise mode.
+  - **Color-Coded Deltas**: Spikes are colored **green** for value increases and **red** for decreases.
 
 ## 🛠 Tech Stack
 
