@@ -52,6 +52,9 @@ function saveState() {
     state.reviseApplyTarget = document.getElementById('revise-apply-target').value;
     state.reviseMods = document.getElementById('revise-mods-grid') ? tableToTsv(readModifierGrid(document.getElementById('revise-mods-grid'))) : '';
     state.revise3DEnabled = document.getElementById('revise-3d-enable')?.checked || false;
+    
+    // Active Tab
+    state.activeTab = document.querySelector('.header-tab.active')?.dataset.tab || 'visualize';
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (_) { /* quota exceeded or private mode — silently skip */ }
@@ -132,6 +135,14 @@ function restoreState() {
   if (state.revise3DEnabled !== undefined) {
     const el = document.getElementById('revise-3d-enable');
     if (el) el.checked = state.revise3DEnabled;
+  }
+
+  // Restore active tab
+  if (state.activeTab) {
+    const tabBtn = document.querySelector(`.header-tab[data-tab="${state.activeTab}"]`);
+    if (tabBtn) {
+      tabBtn.click();
+    }
   }
 }
 
@@ -952,6 +963,7 @@ document.querySelectorAll('.header-tab').forEach(tab => {
       p.style.display = p.dataset.panel === target ? '' : 'none';
     });
     updateScene();
+    saveState();
   });
 });
 
