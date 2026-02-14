@@ -18,6 +18,9 @@ const tables = Array.from({ length: TABLE_COUNT }, () => null); // Float32Array[
 const tableNames = Array.from({ length: TABLE_COUNT }, (_, i) => `Table ${i + 1}`);
 const tableVisible = Array.from({ length: TABLE_COUNT }, () => true);
 const meshes = Array.from({ length: TABLE_COUNT }, () => null);
+let reviseBaseMesh = null;
+let reviseOutputMesh = null;
+let reviseDivergenceMesh = null;
 
 // ── Persistence ─────────────────────────────────────────────────────────────
 const AXIS_FIELDS = ['x-label', 'x-units', 'x-ticks', 'y-label', 'y-units', 'y-ticks', 'z-label', 'z-units'];
@@ -48,6 +51,7 @@ function saveState() {
     state.reviseSource = document.getElementById('revise-source').value;
     state.reviseApplyTarget = document.getElementById('revise-apply-target').value;
     state.reviseMods = document.getElementById('revise-mods-grid') ? tableToTsv(readModifierGrid(document.getElementById('revise-mods-grid'))) : '';
+    state.revise3DEnabled = document.getElementById('revise-3d-enable')?.checked || false;
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (_) { /* quota exceeded or private mode — silently skip */ }
@@ -124,6 +128,10 @@ function restoreState() {
   if (state.reviseMods) {
     const mods = parseTable(state.reviseMods);
     writeGridData(document.getElementById('revise-mods-grid'), mods);
+  }
+  if (state.revise3DEnabled !== undefined) {
+    const el = document.getElementById('revise-3d-enable');
+    if (el) el.checked = state.revise3DEnabled;
   }
 }
 
@@ -219,8 +227,8 @@ function getHeatmapColor(val, min, max, baseColor) {
 }
 
 // ── Surface Builder ─────────────────────────────────────────────────────────
-function buildSurface(data, colorIndex) {
-  const color = new THREE.Color(TABLE_COLORS[colorIndex % TABLE_COLORS.length]);
+function buildSurface(data, colorIndex, customColor = null) {
+  const color = customColor ? new THREE.Color(customColor) : new THREE.Color(TABLE_COLORS[colorIndex % TABLE_COLORS.length]);
   const meshGradients = document.getElementById('enable-mesh-gradients').checked;
 
   let min = Infinity;
@@ -294,6 +302,56 @@ function buildSurface(data, colorIndex) {
   group.add(wireMesh);
 
   return group;
+}
+
+function buildDivergenceMarkers(baseData, resultData) {
+  const step = 15 / (GRID - 1);
+  
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < baseData.length; i++) {
+    const v1 = baseData[i], v2 = resultData[i];
+    min = Math.min(min, v1, v2);
+    max = Math.max(max, v1, v2);
+  }
+  const absMax = Math.max(Math.abs(min), Math.abs(max));
+  const scale = absMax > 0 ? 6 / absMax : 1;
+
+  // Find how many markers we need
+  const markers = [];
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const i = r * GRID + c;
+      const h1 = baseData[i] * scale;
+      const h2 = resultData[i] * scale;
+      if (Math.abs(h1 - h2) > 0.0001) {
+        markers.push({ r, c, h1, h2 });
+      }
+    }
+  }
+
+  if (markers.length === 0) return null;
+
+  // Use InstancedMesh for performance and visibility (thick pillars)
+  const geom = new THREE.BoxGeometry(0.08, 1, 0.08);
+  // Shift geometry so origin is at bottom center
+  geom.translate(0, 0.5, 0); 
+  
+  const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8 });
+  const imesh = new THREE.InstancedMesh(geom, mat, markers.length);
+
+  const dummy = new THREE.Object3D();
+  markers.forEach((m, idx) => {
+    const height = m.h2 - m.h1;
+    dummy.position.set(m.c * step, m.h1, m.r * step);
+    dummy.scale.set(1, height, 1);
+    dummy.updateMatrix();
+    imesh.setMatrixAt(idx, dummy.matrix);
+    
+    const color = (m.h2 > m.h1) ? new THREE.Color('#3adb8a') : new THREE.Color('#ff5252');
+    imesh.setColorAt(idx, color);
+  });
+
+  return imesh;
 }
 
 // ── Axis Builder ────────────────────────────────────────────────────────────
@@ -421,16 +479,80 @@ function updateScene() {
     scene.add(meshes[i]);
   }
 
+  // Revise meshes
+  if (reviseBaseMesh) { scene.remove(reviseBaseMesh); reviseBaseMesh = null; }
+  if (reviseOutputMesh) { scene.remove(reviseOutputMesh); reviseOutputMesh = null; }
+  if (reviseDivergenceMesh) { scene.remove(reviseDivergenceMesh); reviseDivergenceMesh = null; }
+
+  const revise3D = document.getElementById('revise-3d-enable')?.checked;
+  const isReviseTab = document.querySelector('.header-tab[data-tab="revise"]').classList.contains('active');
+
+  if (revise3D && isReviseTab) {
+    // Hide default meshes
+    for (let i = 0; i < TABLE_COUNT; i++) {
+        if (meshes[i]) meshes[i].visible = false;
+    }
+
+    const baseData = readGridData(reviseBaseContainer);
+    const modData = readModifierGrid(reviseModsContainer);
+    const resultData = applyRevision(baseData, modData);
+    
+    // Determine color
+    const srcIdx = parseInt(reviseSource.value, 10);
+    const activeColor = (srcIdx >= 0 && srcIdx < TABLE_COUNT) ? TABLE_COLORS[srcIdx] : '#6c63ff';
+
+    // Calculate inverted color
+    const baseColorObj = new THREE.Color(activeColor);
+    const invertedColorObj = baseColorObj.clone();
+    const hsl = { h: 0, s: 0, l: 0 };
+    invertedColorObj.getHSL(hsl);
+    hsl.h = (hsl.h + 0.5) % 1.0; // Rotate hue by 180 degrees
+    invertedColorObj.setHSL(hsl.h, hsl.s, hsl.l);
+    const invertedColor = '#' + invertedColorObj.getHexString();
+
+    // Build Base mesh (Old) - use base source color
+    reviseBaseMesh = buildSurface(baseData, 0, activeColor);
+    reviseBaseMesh.children.forEach(child => {
+        if (child.material) {
+            child.material.opacity = 0.65;
+        }
+    });
+
+    // Build Output mesh (New) - use inverted color
+    reviseOutputMesh = buildSurface(resultData, 0, invertedColor);
+    reviseOutputMesh.children.forEach(child => {
+        if (child.material) {
+            child.material.opacity = 0.9;
+            child.material.depthWrite = false;
+        }
+    });
+
+    reviseDivergenceMesh = buildDivergenceMarkers(baseData, resultData);
+    
+    scene.add(reviseBaseMesh);
+    scene.add(reviseOutputMesh);
+    if (reviseDivergenceMesh) scene.add(reviseDivergenceMesh);
+  }
+
   updateVisibility();
   buildAxes();
   updateLegend();
 }
 
 function updateVisibility() {
+  const revise3D = document.getElementById('revise-3d-enable')?.checked;
+  const isReviseTab = document.querySelector('.header-tab[data-tab="revise"]').classList.contains('active');
+  const showRevise3D = revise3D && isReviseTab;
+
   for (let i = 0; i < TABLE_COUNT; i++) {
     if (!meshes[i]) continue;
-    meshes[i].visible = tableVisible[i];
+    // If showing Revise 3D, hide all Visualize meshes
+    meshes[i].visible = showRevise3D ? false : tableVisible[i];
   }
+  
+  if (reviseBaseMesh) reviseBaseMesh.visible = showRevise3D;
+  if (reviseOutputMesh) reviseOutputMesh.visible = showRevise3D;
+  if (reviseDivergenceMesh) reviseDivergenceMesh.visible = showRevise3D;
 }
 
 // ── Legend ───────────────────────────────────────────────────────────────────
@@ -439,19 +561,57 @@ function updateLegend() {
   legend.innerHTML = '';
   let hasAny = false;
 
-  for (let i = 0; i < TABLE_COUNT; i++) {
-    if (!tables[i] || !tableVisible[i]) continue;
-    hasAny = true;
-    const item = document.createElement('div');
-    item.className = 'legend-item';
-    const dot = document.createElement('span');
-    dot.className = 'legend-color';
-    dot.style.background = TABLE_COLORS[i];
-    item.appendChild(dot);
-    const txt = document.createElement('span');
-    txt.textContent = tableNames[i];
-    item.appendChild(txt);
-    legend.appendChild(item);
+  const revise3D = document.getElementById('revise-3d-enable')?.checked;
+  const isReviseTab = document.querySelector('.header-tab[data-tab="revise"]').classList.contains('active');
+
+  if (revise3D && isReviseTab) {
+    const srcIdx = parseInt(document.getElementById('revise-source').value, 10);
+    const activeColor = (srcIdx >= 0 && srcIdx < TABLE_COUNT) ? TABLE_COLORS[srcIdx] : '#6c63ff';
+    
+    // Calculate inverted color for legend
+    const baseColorObj = new THREE.Color(activeColor);
+    const invertedColorObj = baseColorObj.clone();
+    const hsl = { h: 0, s: 0, l: 0 };
+    invertedColorObj.getHSL(hsl);
+    hsl.h = (hsl.h + 0.5) % 1.0;
+    invertedColorObj.setHSL(hsl.h, hsl.s, hsl.l);
+    const invertedColor = '#' + invertedColorObj.getHexString();
+
+    const items = [
+      { name: 'Old Table', color: activeColor },
+      { name: 'New Table', color: invertedColor },
+      { name: 'Increase', color: '#3adb8a' },
+      { name: 'Decrease', color: '#ff5252' }
+    ];
+
+    items.forEach(it => {
+      hasAny = true;
+      const item = document.createElement('div');
+      item.className = 'legend-item';
+      const dot = document.createElement('span');
+      dot.className = 'legend-color';
+      dot.style.background = it.color;
+      item.appendChild(dot);
+      const txt = document.createElement('span');
+      txt.textContent = it.name;
+      item.appendChild(txt);
+      legend.appendChild(item);
+    });
+  } else {
+    for (let i = 0; i < TABLE_COUNT; i++) {
+      if (!tables[i] || !tableVisible[i]) continue;
+      hasAny = true;
+      const item = document.createElement('div');
+      item.className = 'legend-item';
+      const dot = document.createElement('span');
+      dot.className = 'legend-color';
+      dot.style.background = TABLE_COLORS[i];
+      item.appendChild(dot);
+      const txt = document.createElement('span');
+      txt.textContent = tableNames[i];
+      item.appendChild(txt);
+      legend.appendChild(item);
+    }
   }
   legend.classList.toggle('hidden', !hasAny);
 }
@@ -791,6 +951,7 @@ document.querySelectorAll('.header-tab').forEach(tab => {
     document.querySelectorAll('.sidebar-panel').forEach(p => {
       p.style.display = p.dataset.panel === target ? '' : 'none';
     });
+    updateScene();
   });
 });
 
@@ -997,6 +1158,11 @@ function computeRevision() {
   } else {
     applyHeatmap(result, reviseOutputContainer, new THREE.Color('#888888'));
   }
+
+  // Update 3D scene if enabled
+  if (document.getElementById('revise-3d-enable')?.checked) {
+    updateScene();
+  }
 }
 
 // When source selector changes, populate base grid
@@ -1166,6 +1332,10 @@ document.getElementById('revise-output-clear').addEventListener('click', () => {
     computeRevision();
     saveState();
   }
+});
+document.getElementById('revise-3d-enable').addEventListener('change', () => {
+    updateScene();
+    saveState();
 });
 
 // ── Restore Saved State & Initial Build ────────────────────────────────────

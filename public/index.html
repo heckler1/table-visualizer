@@ -95,6 +95,16 @@
     <aside id="sidebar-revise" class="sidebar-panel" data-panel="revise" style="display:none;">
       <!-- ... (content omitted for brevity, logic remains the same) ... -->
       <section class="panel">
+        <h2 class="panel-title revise-section-title">3D Visualization</h2>
+        <div class="panel-body">
+          <div class="field-row" style="flex-direction:row; align-items:center; gap:8px;">
+            <input type="checkbox" id="revise-3d-enable" />
+            <label for="revise-3d-enable">Show 3D Comparison (Old vs New)</label>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2 class="panel-title revise-section-title">Source Table</h2>
         <div class="panel-body">
           <div class="field-row">
@@ -131,7 +141,7 @@
           </div>
         </h2>
         <div class="panel-body">
-          <p class="revise-hint">Paste a partial 16×16 table of decimal values. Empty cells = no change. E.g. <code>0.05</code> means +5%, <code>-0.1</code> means −10%.</p>
+          <p class="revise-hint">Paste a partial 16×16 table of decimal values. Empty cells = no change. E.g. <code>5</code> means +5%, <code>-10</code> means −10%.</p>
           <div id="revise-mods-grid" class="revise-grid-container"></div>
         </div>
       </section>
