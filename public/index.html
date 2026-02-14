@@ -104,15 +104,25 @@
               <option value="7">Table 8</option>
             </select>
           </div>
-          <div class="field-row">
+          <div class="field-row" style="flex-direction:row; align-items:center; justify-content:space-between;">
             <label>Base Table (16×16)</label>
+            <div style="display:flex; gap:4px;">
+              <button class="table-action-btn" id="revise-base-copy" title="Copy base table">📋</button>
+              <button class="table-action-btn danger" id="revise-base-clear" title="Clear base table">🗑</button>
+            </div>
           </div>
           <div id="revise-base-grid" class="revise-grid-container"></div>
         </div>
       </section>
 
       <section class="panel">
-        <h2 class="panel-title revise-section-title">Percentage Modifiers</h2>
+        <h2 class="panel-title revise-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Percentage Modifiers</span>
+          <div style="display:flex; gap:4px;">
+            <button class="table-action-btn" id="revise-mods-copy" title="Copy modifiers" style="font-size:12px; width:22px; height:22px;">📋</button>
+            <button class="table-action-btn danger" id="revise-mods-clear" title="Clear modifiers" style="font-size:12px; width:22px; height:22px;">🗑</button>
+          </div>
+        </h2>
         <div class="panel-body">
           <p class="revise-hint">Paste a partial 16×16 table of decimal values. Empty cells = no change. E.g. <code>0.05</code> means +5%, <code>-0.1</code> means −10%.</p>
           <div id="revise-mods-grid" class="revise-grid-container"></div>
@@ -125,6 +135,7 @@
           <div id="revise-output-grid" class="revise-grid-container"></div>
           <div class="revise-actions">
             <button class="revise-btn" id="revise-copy-btn" title="Copy output to clipboard">📋 Copy</button>
+            <button class="revise-btn danger" id="revise-output-clear" title="Clear output & modifiers">🗑 Clear</button>
             <div class="revise-apply">
               <label for="revise-apply-target">Apply to:</label>
               <select id="revise-apply-target">

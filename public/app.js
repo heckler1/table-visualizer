@@ -36,7 +36,7 @@ function saveState() {
     }
     // Table data (serialize from Float32Array to CSV string)
     for (let i = 0; i < TABLE_COUNT; i++) {
-      state.tableData[i] = tables[i] ? tableToCsv(tables[i]) : '';
+      state.tableData[i] = tables[i] ? tableToTsv(tables[i]) : '';
     }
     // Sidebar width
     state.sidebarWidth = document.documentElement.style.getPropertyValue('--sidebar-w');
@@ -44,7 +44,7 @@ function saveState() {
     // Revise Tab state
     state.reviseSource = document.getElementById('revise-source').value;
     state.reviseApplyTarget = document.getElementById('revise-apply-target').value;
-    state.reviseMods = document.getElementById('revise-mods-grid') ? tableToCsv(readModifierGrid(document.getElementById('revise-mods-grid'))) : '';
+    state.reviseMods = document.getElementById('revise-mods-grid') ? tableToTsv(readModifierGrid(document.getElementById('revise-mods-grid'))) : '';
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (_) { /* quota exceeded or private mode — silently skip */ }
@@ -413,6 +413,8 @@ for (let i = 0; i < TABLE_COUNT; i++) {
       <span><span class="table-color-dot" style="background:${TABLE_COLORS[i]}"></span> Table ${i + 1}</span>
       <span style="display:flex;align-items:center;gap:6px;">
         <span class="status" id="table-status-${i}">empty</span>
+        <button class="table-action-btn" id="table-copy-${i}" title="Copy to clipboard">📋</button>
+        <button class="table-action-btn danger" id="table-clear-${i}" title="Clear table">🗑</button>
         <button class="table-visibility-btn" id="table-vis-${i}" title="Toggle visibility">👁</button>
       </span>
     </div>
@@ -444,16 +446,41 @@ for (let i = 0; i < TABLE_COUNT; i++) {
   }, 300));
 }
 
-// Per-table visibility toggles
+// Per-table action buttons (Copy/Clear/Visibility)
 for (let i = 0; i < TABLE_COUNT; i++) {
-  const btn = document.getElementById(`table-vis-${i}`);
-  btn.addEventListener('click', () => {
+  // Visibility
+  const visBtn = document.getElementById(`table-vis-${i}`);
+  visBtn.addEventListener('click', () => {
     tableVisible[i] = !tableVisible[i];
-    btn.textContent = tableVisible[i] ? '👁' : '—';
-    btn.classList.toggle('hidden-table', !tableVisible[i]);
+    visBtn.textContent = tableVisible[i] ? '👁' : '—';
+    visBtn.classList.toggle('hidden-table', !tableVisible[i]);
     updateVisibility();
     updateLegend();
     saveState();
+  });
+
+  // Copy
+  const copyBtn = document.getElementById(`table-copy-${i}`);
+  copyBtn.addEventListener('click', () => {
+    if (tables[i]) {
+      navigator.clipboard.writeText(tableToTsv(tables[i]));
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = '✓';
+      setTimeout(() => copyBtn.textContent = orig, 1000);
+    }
+  });
+
+  // Clear
+  const clearBtn = document.getElementById(`table-clear-${i}`);
+  clearBtn.addEventListener('click', () => {
+    if (confirm(`Clear Table ${i + 1}?`)) {
+      tables[i] = null;
+      updateGridFromData(i, new Float32Array(GRID * GRID));
+      const status = document.getElementById(`table-status-${i}`);
+      if (status) status.textContent = 'empty';
+      updateScene();
+      saveState();
+    }
   });
 }
 
@@ -561,8 +588,14 @@ function applyHeatmap(data, container, baseColor) {
     if (v > max) max = v;
   }
   
-  // If all NaN or empty
-  if (min === Infinity) return;
+  // If all NaN or empty, clear all and return
+  if (min === Infinity) {
+    for (let i = 0; i < inputs.length; i++) {
+        inputs[i].style.backgroundColor = '';
+        inputs[i].style.color = '';
+    }
+    return;
+  }
 
   const range = max - min;
   
@@ -630,9 +663,11 @@ function handleGridPaste(e, tableIndex, startR, startC) {
   if (!text) return;
 
   // Parse pasted text
-  const lines = text.trim().split(/\r?\n/);
+  // Remove trailing newlines only, preserving leading ones for vertical offset
+  const cleanText = text.replace(/\r?\n$/, '');
+  const lines = cleanText.split(/\r?\n/);
   if (lines.length === 0) return;
-  const delim = lines[0].includes('\t') ? '\t' : ','; // simple auto-detect
+  const delim = text.includes('\t') ? '\t' : ','; // simple auto-detect
 
   if (!tables[tableIndex]) {
     tables[tableIndex] = new Float32Array(GRID * GRID);
@@ -671,8 +706,8 @@ function updateGridFromData(tableIndex, data) {
     const r = parseInt(inputs[i].dataset.r, 10);
     const c = parseInt(inputs[i].dataset.c, 10);
     const val = data[r * GRID + c];
-    // Max 3 decimals, strip trailing zeros
-    inputs[i].value = parseFloat(val.toFixed(3));
+    // Enforce 3 decimals, including trailing zeros
+    inputs[i].value = val.toFixed(3);
   }
   updateCellColors(tableIndex);
 }
@@ -789,7 +824,7 @@ function writeGridData(container, data) {
     const r = parseInt(inputs[i].dataset.r, 10);
     const c = parseInt(inputs[i].dataset.c, 10);
     const val = data[r * GRID + c];
-    inputs[i].value = isNaN(val) ? '' : parseFloat(val.toFixed(3));
+    inputs[i].value = isNaN(val) ? '' : val.toFixed(3);
   }
 }
 
@@ -798,9 +833,11 @@ function handleGenericGridPaste(e, container, startR, startC, onComplete) {
   e.preventDefault();
   const text = (e.clipboardData || window.clipboardData).getData('text');
   if (!text) return;
-  const lines = text.trim().split(/\r?\n/);
+  // Remove trailing newlines only
+  const cleanText = text.replace(/\r?\n$/, '');
+  const lines = cleanText.split(/\r?\n/);
   if (lines.length === 0) return;
-  const delim = lines[0].includes('\t') ? '\t' : ',';
+  const delim = text.includes('\t') ? '\t' : ',';
   
   const inputs = container.getElementsByTagName('input');
   // Map inputs by coordinate for easier access? Or just iterate?
@@ -850,8 +887,8 @@ function applyRevision(base, mods) {
   for (let i = 0; i < GRID * GRID; i++) {
     const b = base[i];
     const m = mods[i];
-    // Formula: base * (1 + modifier). Logic: 1.05 = +5%
-    result[i] = isNaN(m) ? b : b * (1 + m);
+    // Formula: base * (1 + modifier). Logic: 5 = +5%
+    result[i] = isNaN(m) ? b : b * (1 + m/100);
   }
   return result;
 }
@@ -861,15 +898,16 @@ function applyRevision(base, mods) {
  * @param {Float32Array} data
  * @returns {string}
  */
-function tableToCsv(data) {
+function tableToTsv(data) {
   if (!data) return '';
   let csv = '';
   for (let r = 0; r < GRID; r++) {
     const row = [];
     for (let c = 0; c < GRID; c++) {
-      row.push(data[r * GRID + c]);
+      const val = data[r * GRID + c];
+      row.push(val.toFixed(3));
     }
-    csv += row.join(',') + (r < GRID - 1 ? '\n' : '');
+    csv += row.join('\t') + (r < GRID - 1 ? '\n' : '');
   }
   return csv;
 }
@@ -894,8 +932,12 @@ function computeRevision() {
     applyHeatmap(baseData, reviseBaseContainer, new THREE.Color('#888888'));
   }
 
-  // Modifiers: Use Accent Color
-  applyHeatmap(modData, reviseModsContainer, new THREE.Color('#6c63ff'));
+  // Modifiers: Match Source Color
+  if (srcIdx >= 0 && srcIdx < TABLE_COUNT) {
+    applyHeatmap(modData, reviseModsContainer, new THREE.Color(TABLE_COLORS[srcIdx % TABLE_COLORS.length]));
+  } else {
+    applyHeatmap(modData, reviseModsContainer, new THREE.Color('#888888'));
+  }
 
   // Output: Use Source Color (to match the table being revised)
   if (srcIdx >= 0 && srcIdx < TABLE_COUNT) {
@@ -908,8 +950,15 @@ function computeRevision() {
 // When source selector changes, populate base grid
 reviseSource.addEventListener('change', () => {
   const idx = parseInt(reviseSource.value, 10);
-  if (idx >= 0 && idx < TABLE_COUNT && tables[idx]) {
-    writeGridData(reviseBaseContainer, tables[idx]);
+  if (idx >= 0 && idx < TABLE_COUNT) {
+    // Sync "Apply to" target with source table selection
+    document.getElementById('revise-apply-target').value = idx;
+
+    if (tables[idx]) {
+      writeGridData(reviseBaseContainer, tables[idx]);
+    } else {
+      writeGridData(reviseBaseContainer, new Float32Array(GRID * GRID));
+    }
   } else {
     // Clear base, but keep grid structure - just clear values?
     // We already have generic paste that works.
@@ -929,7 +978,7 @@ document.getElementById('revise-apply-target').addEventListener('change', () => 
 // Copy output (Grid to CSV)
 document.getElementById('revise-copy-btn').addEventListener('click', () => {
     const data = readGridData(reviseOutputContainer);
-    const csv = tableToCsv(data);
+    const csv = tableToTsv(data);
     if (csv) {
     navigator.clipboard.writeText(csv);
     const btn = document.getElementById('revise-copy-btn');
@@ -969,6 +1018,11 @@ document.getElementById('revise-apply-btn').addEventListener('click', () => {
   const orig = btn.textContent;
   btn.textContent = '✓ Applied';
   setTimeout(() => btn.textContent = orig, 1500);
+
+  // Clear modifiers after apply
+  writeGridData(reviseModsContainer, new Float32Array(GRID * GRID).fill(NaN));
+  computeRevision();
+  saveState();
 });
 
 // Apply output to ALL active tables
@@ -1001,6 +1055,64 @@ document.getElementById('revise-apply-all-btn').addEventListener('click', () => 
     const orig = btn.textContent;
     btn.textContent = `✓ Applied to ${count}`;
     setTimeout(() => btn.textContent = orig, 1500);
+
+    // Clear modifiers after apply
+    writeGridData(reviseModsContainer, new Float32Array(GRID * GRID).fill(NaN));
+    computeRevision();
+    saveState();
+  }
+});
+
+// ── Revise Tab Actions ──
+document.getElementById('revise-base-copy').addEventListener('click', () => {
+  const data = readGridData(reviseBaseContainer);
+  navigator.clipboard.writeText(tableToTsv(data));
+  const el = document.getElementById('revise-base-copy');
+  const orig = el.textContent;
+  el.textContent = '✓';
+  setTimeout(() => el.textContent = orig, 1000);
+});
+
+document.getElementById('revise-base-clear').addEventListener('click', () => {
+  if (confirm('Clear Base Table?')) {
+    writeGridData(reviseBaseContainer, new Float32Array(GRID * GRID));
+    computeRevision();
+    saveState();
+  }
+});
+
+document.getElementById('revise-mods-copy').addEventListener('click', () => {
+  const data = readModifierGrid(reviseModsContainer);
+  // Need a special version of tableToCsv that handle NaNs as empty strings
+  let tsv = '';
+  for (let r = 0; r < GRID; r++) {
+    const row = [];
+    for (let c = 0; c < GRID; c++) {
+      const v = data[r * GRID + c];
+      row.push(isNaN(v) ? '' : v);
+    }
+    tsv += row.join('\t') + (r < GRID - 1 ? '\n' : '');
+  }
+  navigator.clipboard.writeText(tsv);
+  const el = document.getElementById('revise-mods-copy');
+  const orig = el.textContent;
+  el.textContent = '✓';
+  setTimeout(() => el.textContent = orig, 1000);
+});
+
+document.getElementById('revise-mods-clear').addEventListener('click', () => {
+  if (confirm('Clear Percentage Modifiers?')) {
+    writeGridData(reviseModsContainer, new Float32Array(GRID * GRID).fill(NaN));
+    computeRevision();
+    saveState();
+  }
+});
+
+document.getElementById('revise-output-clear').addEventListener('click', () => {
+  if (confirm('Clear Output & Modifiers?')) {
+    writeGridData(reviseModsContainer, new Float32Array(GRID * GRID).fill(NaN));
+    computeRevision();
+    saveState();
   }
 });
 
