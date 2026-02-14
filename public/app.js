@@ -41,6 +41,9 @@ function saveState() {
     // Sidebar width
     state.sidebarWidth = document.documentElement.style.getPropertyValue('--sidebar-w');
 
+    // Visualization settings
+    state.meshGradientsEnabled = document.getElementById('enable-mesh-gradients').checked;
+
     // Revise Tab state
     state.reviseSource = document.getElementById('revise-source').value;
     state.reviseApplyTarget = document.getElementById('revise-apply-target').value;
@@ -104,6 +107,11 @@ function restoreState() {
   if (state.sidebarWidth) {
     document.documentElement.style.setProperty('--sidebar-w', state.sidebarWidth);
     resize();
+  }
+
+  // Restore visualization settings
+  if (state.meshGradientsEnabled !== undefined) {
+    document.getElementById('enable-mesh-gradients').checked = state.meshGradientsEnabled;
   }
 
   // Restore Revise tab settings
@@ -187,16 +195,44 @@ function parseTable(text) {
   return data;
 }
 
+// Helper: get heatmap color for a value
+function getHeatmapColor(val, min, max, baseColor) {
+  const range = max - min;
+  
+  // Calculate inverse (complementary) color
+  const inverseColor = baseColor.clone();
+  const hsl = { h: 0, s: 0, l: 0 };
+  inverseColor.getHSL(hsl);
+  hsl.h = (hsl.h + 0.5) % 1.0; // Rotate hue by 180 degrees
+  inverseColor.setHSL(hsl.h, hsl.s, hsl.l);
+
+  // Calculate intensity (0 to 1)
+  let t = 0;
+  if (range > 0.000001) {
+    t = (val - min) / range;
+  } else {
+    t = 0.5; // Default if all values are same
+  }
+  
+  // Interpolate color: linear interpolation from inverse to base
+  return inverseColor.clone().lerp(baseColor, t);
+}
+
 // ── Surface Builder ─────────────────────────────────────────────────────────
 function buildSurface(data, colorIndex) {
   const color = new THREE.Color(TABLE_COLORS[colorIndex % TABLE_COLORS.length]);
+  const meshGradients = document.getElementById('enable-mesh-gradients').checked;
+
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
 
   // Find the largest absolute value for scaling (Z=0 always maps to Y=0)
-  let absMax = 0;
-  for (let i = 0; i < data.length; i++) {
-    const a = Math.abs(data[i]);
-    if (a > absMax) absMax = a;
-  }
+  const absMax = Math.max(Math.abs(min), Math.abs(max));
   const scale = absMax > 0 ? 6 / absMax : 1; // map to ~6 units tall
 
   const geom = new THREE.PlaneGeometry(15, 15, GRID - 1, GRID - 1);
@@ -205,17 +241,36 @@ function buildSurface(data, colorIndex) {
   geom.translate(7.5, 0, 7.5);
 
   const pos = geom.attributes.position;
-  for (let r = 0; r < GRID; r++) {
-    for (let c = 0; c < GRID; c++) {
-      const idx = r * GRID + c;
-      const height = data[idx] * scale;
-      pos.setY(idx, height);
+
+  // If mesh gradients are enabled, we need vertex colors
+  if (meshGradients) {
+    const colors = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      const val = data[i];
+      const height = val * scale;
+      pos.setY(i, height);
+
+      const vertexColor = getHeatmapColor(val, min, max, color);
+      colors[i * 3] = vertexColor.r;
+      colors[i * 3 + 1] = vertexColor.g;
+      colors[i * 3 + 2] = vertexColor.b;
+    }
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  } else {
+    for (let r = 0; r < GRID; r++) {
+      for (let c = 0; c < GRID; c++) {
+        const idx = r * GRID + c;
+        const height = data[idx] * scale;
+        pos.setY(idx, height);
+      }
     }
   }
+
   geom.computeVertexNormals();
 
   const mat = new THREE.MeshStandardMaterial({
-    color,
+    color: meshGradients ? 0xffffff : color,
+    vertexColors: meshGradients,
     transparent: true,
     opacity: 0.72,
     side: THREE.DoubleSide,
@@ -446,6 +501,12 @@ for (let i = 0; i < TABLE_COUNT; i++) {
   }, 300));
 }
 
+// Global Visualization Settings
+document.getElementById('enable-mesh-gradients').addEventListener('change', () => {
+  updateScene();
+  saveState();
+});
+
 // Per-table action buttons (Copy/Clear/Visibility)
 for (let i = 0; i < TABLE_COUNT; i++) {
   // Visibility
@@ -622,16 +683,7 @@ function applyHeatmap(data, container, baseColor) {
         continue;
     }
 
-    // Calculate intensity (0 to 1)
-    let t = 0;
-    if (range > 0.000001) {
-        t = (val - min) / range;
-    } else {
-        t = 0.5; // Default if all values are same
-    }
-    
-    // Interpolate color: linear interpolation from inverse to base
-    const finalColor = inverseColor.clone().lerp(baseColor, t);
+    const finalColor = getHeatmapColor(val, min, max, baseColor);
     
     // Convert to rgbaCSS
     const rCol = Math.round(finalColor.r * 255);

@@ -6,22 +6,27 @@ A professional-grade interactive 3D surface-plot visualizer for up to **8 × 16�
 
 - **Multi-Tab Interface**:
   - **Visualize Tab**: See all your tables rendered as interactive 3D surfaces in a shared coordinate system.
-  - **Revise Tab**: Modify existing tables using percentage-based modifiers. Apply changes to single tables or all active tables at once.
+  - **Revise Tab**: Modify existing tables using percentage-based modifiers. Apply changes to single tables with full visual feedback.
 - **Interactive 16×16 Grids**: All data entry uses real-time editable grids with built-in **Heatmap Gradients**. Cells change color based on their relative values.
-- **Selection Shadowing**: Focus (click or tab) a cell in any Revise grid to see a subtle highlight at the same coordinates across the other tables, making it easy to track data relationships.
-- **Support for 8 Tables**: Manage up to 8 independent datasets. Each table has a unique color identity throughout the app.
+- **Table Quick-Actions**:
+  - **Copy (📋)**: Instantly copies table data in TSV format, formatted to 3 decimal places for perfect spreadsheet integration.
+  - **Clear (🗑)**: Resets the table data, clears heatmap colors, and wipes the corresponding 3D mesh.
+- **Linked Selections (Revise Tab)**: The "Source Table" and "Apply To" targets are linked—selecting a table to revise automatically prepares it for application, streamlining your workflow.
+- **Selection Shadowing**: Focus a cell in any grid to see a shared highlight across all related grids (Base Table, Modifiers, and Output).
 - **Smart Data Integration**:
-  - Paste CSV or TSV data directly into any grid (auto-detects delimiters).
-  - Export revised tables back to CSV with a single click.
-- **Advanced Axis Control**: Fully configurable X, Y, and Z axes. Set custom labels, units, and precise tick values.
-- **Professional 3D Viewport**: Built with Three.js. Includes smooth OrbitControls (rotate, zoom, pan), ACES Filmic tone mapping, and a dynamic legend.
-- **Persistent State**: Your tables, axis configurations, and all UI settings (including Revise tab selections and modifiers) are automatically saved to your browser's local storage.
+  - Paste TSV/CSV data directly into any grid (auto-detects delimiters).
+  - Interprets leading newlines in pasted data as vertical offsets (empty rows).
+- **Advanced 3D Visualization**:
+  - **Mesh Heatmaps**: Optional vertex-colored gradients on 3D meshes that match the 2D grid's heatmap.
+  - **3-Decimal Precision**: Strict enforcement of 3 decimal places (e.g., `10.500`) for all values in the UI and clipboard.
+  - **Configurable Axes**: Fully customized X, Y, and Z labels, units, and precise tick values.
+- **Persistent State**: Your tables, axis configurations, revision settings, and visualization preferences (like mesh gradients) are automatically saved to local storage.
 
 ## 🛠 Tech Stack
 
 - **Cloudflare Workers**: High-performance edge deployment.
 - **Three.js**: Hardware-accelerated 3D rendering.
-- **Vanilla JS/CSS**: Sleek, modern performance without the overhead of heavy frameworks.
+- **Vanilla JS/CSS**: Sleek, modern performance without heavy frameworks.
 - **Inter Font**: Clean, modern typography for maximum readability.
 
 ## 💻 Local Development
@@ -32,6 +37,7 @@ A professional-grade interactive 3D surface-plot visualizer for up to **8 × 16�
 
 ## 📋 Usage Tips
 
-- **Pasting**: You can paste from Excel or Google Sheets directly into any grid.
-- **Revision**: In the Revise tab, enter `0.1` to increase values by 10%, or `-0.05` to decrease by 5%. Empty cells are ignored during revision.
-- **Visibility**: Toggle the 👁 icon in the Sidebar to hide/show specific tables in the 3D view.
+- **Pasting**: You can paste from Excel or Sheets directly. Leading empty rows in your selection will be preserved as offsets.
+- **Revision**: In the Revise tab, enter `5` to increase values by 5%, or `-10` to decrease by 10%. Empty cells are ignored.
+- **Visibility**: Toggle the 👁 icon in the sidebar to hide/show specific tables in the 3D scene.
+- **Mesh Gradients**: Enable "Mesh Gradients" in Visualization Settings to mirror heatmap colors on the 3D surface.
