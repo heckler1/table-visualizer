@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Table Visualizer</title>
+  <meta name="description" content="Paste up to 8 16×16 numeric tables and visualize them as interactive 3D surface plots." />
+  <link rel="stylesheet" href="/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- ─── Header ─── -->
+  <header id="app-header">
+    <h1>3D Table Visualizer</h1>
+    <div class="header-tabs">
+      <button class="header-tab active" data-tab="visualize">Visualize</button>
+      <button class="header-tab" data-tab="revise">Revise</button>
+    </div>
+  </header>
+
+  <div id="app-layout">
+    <!-- ─── Sidebar: Visualize ─── -->
+    <aside id="sidebar" class="sidebar-panel" data-panel="visualize">
+      <!-- Axis Configuration -->
+      <section class="panel" id="axis-panel">
+        <h2 class="panel-title" data-toggle="axis-content">
+          <span>Axis Configuration</span>
+          <span class="chevron">▾</span>
+        </h2>
+        <div class="panel-body" id="axis-content">
+          <div class="axis-group">
+            <h3>X Axis (Columns)</h3>
+            <div class="field-row">
+              <label for="x-label">Label</label>
+              <input type="text" id="x-label" placeholder="e.g. Frequency" />
+            </div>
+            <div class="field-row">
+              <label for="x-units">Units</label>
+              <input type="text" id="x-units" placeholder="e.g. Hz" />
+            </div>
+            <div class="field-row">
+              <label for="x-ticks">Tick Values (comma-sep)</label>
+              <input type="text" id="x-ticks" placeholder="0, 1, 2, … 15" />
+            </div>
+          </div>
+          <div class="axis-group">
+            <h3>Y Axis (Rows)</h3>
+            <div class="field-row">
+              <label for="y-label">Label</label>
+              <input type="text" id="y-label" placeholder="e.g. Amplitude" />
+            </div>
+            <div class="field-row">
+              <label for="y-units">Units</label>
+              <input type="text" id="y-units" placeholder="e.g. dB" />
+            </div>
+            <div class="field-row">
+              <label for="y-ticks">Tick Values (comma-sep)</label>
+              <input type="text" id="y-ticks" placeholder="0, 1, 2, … 15" />
+            </div>
+          </div>
+          <div class="axis-group">
+            <h3>Z Axis (Values)</h3>
+            <div class="field-row">
+              <label for="z-label">Label</label>
+              <input type="text" id="z-label" placeholder="e.g. Gain" />
+            </div>
+            <div class="field-row">
+              <label for="z-units">Units</label>
+              <input type="text" id="z-units" placeholder="e.g. V" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Table Data Panels -->
+      <section class="panel" id="data-panel">
+        <h2 class="panel-title" data-toggle="data-content">
+          <span>Table Data</span>
+          <span class="chevron">▾</span>
+        </h2>
+        <div class="panel-body" id="data-content">
+          <!-- Dynamically created by JS: 8 table textareas -->
+        </div>
+      </section>
+    </aside>
+
+    <!-- ─── Sidebar: Revise ─── -->
+    <aside id="sidebar-revise" class="sidebar-panel" data-panel="revise" style="display:none;">
+      <!-- ... (content omitted for brevity, logic remains the same) ... -->
+      <section class="panel">
+        <h2 class="panel-title revise-section-title">Source Table</h2>
+        <div class="panel-body">
+          <div class="field-row">
+            <label for="revise-source">Select table to revise</label>
+            <select id="revise-source">
+              <option value="-1">— Paste custom —</option>
+              <option value="0">Table 1</option>
+              <option value="1">Table 2</option>
+              <option value="2">Table 3</option>
+              <option value="3">Table 4</option>
+              <option value="4">Table 5</option>
+              <option value="5">Table 6</option>
+              <option value="6">Table 7</option>
+              <option value="7">Table 8</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label>Base Table (16×16)</label>
+          </div>
+          <div id="revise-base-grid" class="revise-grid-container"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title revise-section-title">Percentage Modifiers</h2>
+        <div class="panel-body">
+          <p class="revise-hint">Paste a partial 16×16 table of decimal values. Empty cells = no change. E.g. <code>0.05</code> means +5%, <code>-0.1</code> means −10%.</p>
+          <div id="revise-mods-grid" class="revise-grid-container"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title revise-section-title">Output</h2>
+        <div class="panel-body">
+          <div id="revise-output-grid" class="revise-grid-container"></div>
+          <div class="revise-actions">
+            <button class="revise-btn" id="revise-copy-btn" title="Copy output to clipboard">📋 Copy</button>
+            <div class="revise-apply">
+              <label for="revise-apply-target">Apply to:</label>
+              <select id="revise-apply-target">
+                <option value="0">Table 1</option>
+                <option value="1">Table 2</option>
+                <option value="2">Table 3</option>
+                <option value="3">Table 4</option>
+                <option value="4">Table 5</option>
+                <option value="5">Table 6</option>
+                <option value="6">Table 7</option>
+                <option value="7">Table 8</option>
+              </select>
+              <button class="revise-btn accent" id="revise-apply-btn">Apply</button>
+            </div>
+            <button class="revise-btn accent" id="revise-apply-all-btn" style="width:100%">Apply to All Active Tables</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Resizer Handle -->
+    <div id="sidebar-resizer"></div>
+
+    <!-- ─── 3D Viewport ─── -->
+    <main id="viewport">
+      <canvas id="three-canvas"></canvas>
+      <div id="legend"></div>
+    </main>
+  </div>
+
+  <!-- Three.js via importmap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
