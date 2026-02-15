@@ -87,6 +87,41 @@ body {
   color: var(--text);
 }
 
+.header-divider {
+  width: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+
+.header-action-btn {
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-action-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.header-action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.header-action-btn .icon {
+  font-size: 14px;
+}
+
 /* Visibility toggle button */
 .table-visibility-btn {
   background: none;

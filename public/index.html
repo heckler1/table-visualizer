@@ -15,6 +15,10 @@
     <div class="header-tabs">
       <button class="header-tab active" data-tab="visualize">Visualize</button>
       <button class="header-tab" data-tab="revise">Revise</button>
+      <div class="header-divider"></div>
+      <button id="undo-btn" class="header-action-btn" title="Undo (Ctrl+Z)" disabled>
+        <span class="icon">↩</span> Undo
+      </button>
     </div>
   </header>
 
@@ -167,7 +171,6 @@
               </select>
               <button class="revise-btn accent" id="revise-apply-btn">Apply</button>
             </div>
-            <button class="revise-btn accent" id="revise-apply-all-btn" style="width:100%">Apply to All Active Tables</button>
           </div>
         </div>
       </section>

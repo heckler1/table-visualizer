@@ -22,6 +22,49 @@ let reviseBaseMesh = null;
 let reviseOutputMesh = null;
 let reviseDivergenceMesh = null;
 
+// ── Undo History ────────────────────────────────────────────────────────────
+const historyStack = [];
+const MAX_HISTORY = 50;
+
+function pushHistory() {
+  // Save a deep copy of the current tables
+  const snapshot = tables.map(t => t ? new Float32Array(t) : null);
+  historyStack.push(snapshot);
+  
+  if (historyStack.length > MAX_HISTORY) {
+    historyStack.shift();
+  }
+  
+  const undoBtn = document.getElementById('undo-btn');
+  if (undoBtn) undoBtn.disabled = false;
+}
+
+function undo() {
+  if (historyStack.length === 0) return;
+  
+  const snapshot = historyStack.pop();
+  
+  // Restore tables
+  for (let i = 0; i < TABLE_COUNT; i++) {
+    tables[i] = snapshot[i];
+    updateGridFromData(i, snapshot[i]);
+  }
+  
+  // Refresh Revise tab if active
+  const isReviseTab = document.querySelector('.header-tab[data-tab="revise"]').classList.contains('active');
+  if (isReviseTab) {
+    const currentSrcIdx = parseInt(reviseSource.value, 10);
+    writeGridData(reviseBaseContainer, tables[currentSrcIdx]);
+    computeRevision();
+  }
+  
+  updateScene();
+  saveState();
+  
+  const undoBtn = document.getElementById('undo-btn');
+  if (undoBtn) undoBtn.disabled = historyStack.length === 0;
+}
+
 // ── Persistence ─────────────────────────────────────────────────────────────
 const AXIS_FIELDS = ['x-label', 'x-units', 'x-ticks', 'y-label', 'y-units', 'y-ticks', 'z-label', 'z-units'];
 
@@ -706,6 +749,7 @@ for (let i = 0; i < TABLE_COUNT; i++) {
   const clearBtn = document.getElementById(`table-clear-${i}`);
   clearBtn.addEventListener('click', () => {
     if (confirm(`Clear Table ${i + 1}?`)) {
+      pushHistory();
       tables[i] = null;
       updateGridFromData(i, new Float32Array(GRID * GRID));
       const status = document.getElementById(`table-status-${i}`);
@@ -778,6 +822,13 @@ function buildGrid(container, options = {}) {
 }
 
 function handleCellInput(tableIndex, r, c, value) {
+  // Push history before first edit in this cell (triggered on first input after focus)
+  const input = document.activeElement;
+  if (input && input.dataset.lastFocussedValue === undefined) {
+    pushHistory();
+    input.dataset.lastFocussedValue = input.value;
+  }
+
   if (!tables[tableIndex]) {
     tables[tableIndex] = new Float32Array(GRID * GRID);
   }
@@ -882,6 +933,7 @@ function applyHeatmap(data, container, baseColor) {
 
 function handleGridPaste(e, tableIndex, startR, startC) {
   e.preventDefault();
+  pushHistory();
   const text = (e.clipboardData || window.clipboardData).getData('text');
   if (!text) return;
 
@@ -1056,6 +1108,10 @@ function writeGridData(container, data) {
 // Helper: Generic grid paste logic (DOM-based)
 function handleGenericGridPaste(e, container, startR, startC, onComplete) {
   e.preventDefault();
+  // Only push history if this is a main table grid or the revise base grid
+  if (container.id.startsWith('table-grid-') || container.id === 'revise-base-grid') {
+    pushHistory();
+  }
   const text = (e.clipboardData || window.clipboardData).getData('text');
   if (!text) return;
   // Remove trailing newlines only
@@ -1232,14 +1288,19 @@ document.getElementById('revise-apply-btn').addEventListener('click', () => {
   const base = readGridData(reviseBaseContainer);
   const mods = readModifierGrid(reviseModsContainer);
   
-  const target = parseInt(document.getElementById('revise-apply-target').value, 10);
-  if (target < 0 || target >= TABLE_COUNT) return;
+  const targetIdx = parseInt(document.getElementById('revise-apply-target').value, 10);
+  if (targetIdx < 0 || targetIdx >= TABLE_COUNT) return;
 
-  // We should make sure we have valid data. If Base is all zeros, maybe that's fine?
-  // If undefined/null, handle it:
+  pushHistory();
   const newData = applyRevision(base, mods);
-  updateTableSlot(target, newData);
+  updateTableSlot(targetIdx, newData);
   
+  // If we applied to the currently selected source table, refresh the Revise base grid
+  const currentSrcIdx = parseInt(reviseSource.value, 10);
+  if (targetIdx === currentSrcIdx) {
+    writeGridData(reviseBaseContainer, newData);
+  }
+
   updateScene();
   saveState();
 
@@ -1255,43 +1316,6 @@ document.getElementById('revise-apply-btn').addEventListener('click', () => {
   saveState();
 });
 
-// Apply output to ALL active tables
-document.getElementById('revise-apply-all-btn').addEventListener('click', () => {
-  const mods = readModifierGrid(reviseModsContainer);
-  // Check if mods has any values?
-  let hasMods = false;
-  for(let i=0; i<mods.length; i++) { if(!isNaN(mods[i])) hasMods = true; }
-  
-  // If no mods, maybe we just want to apply base? But "Apply All" usually implies applying the modifier to all.
-  // The original logic was: applyRevision(tables[i], mods).
-  
-  if (!hasMods) return; // nothing to do
-
-  let count = 0;
-  for (let i = 0; i < TABLE_COUNT; i++) {
-    if (tables[i]) {
-      const newData = applyRevision(tables[i], mods);
-      updateTableSlot(i, newData);
-      count++;
-    }
-  }
-
-  if (count > 0) {
-    updateScene();
-    saveState();
-    
-    // Flash button
-    const btn = document.getElementById('revise-apply-all-btn');
-    const orig = btn.textContent;
-    btn.textContent = `✓ Applied to ${count}`;
-    setTimeout(() => btn.textContent = orig, 1500);
-
-    // Clear modifiers after apply
-    writeGridData(reviseModsContainer, new Float32Array(GRID * GRID).fill(NaN));
-    computeRevision();
-    saveState();
-  }
-});
 
 // ── Revise Tab Actions ──
 document.getElementById('revise-base-copy').addEventListener('click', () => {
@@ -1396,3 +1420,20 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
+
+// ── Undo Listeners ──
+document.getElementById('undo-btn')?.addEventListener('click', undo);
+
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    e.preventDefault();
+    undo();
+  }
+});
+
+// Clear focus tracking on blur to allow next edit to push history
+document.addEventListener('focusout', (e) => {
+  if (e.target.classList.contains('cell-input')) {
+    delete e.target.dataset.lastFocussedValue;
+  }
+});

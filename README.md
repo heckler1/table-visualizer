@@ -10,6 +10,7 @@ A professional-grade interactive 3D surface-plot visualizer for up to **8 × 16�
   - **3D Comparison View**: Toggle "Show 3D Comparison" in the Revise tab to see the **Old** (source) and **New** (output) heatmaps overlaid in 3D.
 - **Interactive 16×16 Grids**: All data entry uses real-time editable grids with built-in **Heatmap Gradients**. Cells change color based on their relative values.
 - **Table Quick-Actions**:
+  - **Undo (↩)**: Global undo functionality that tracks the last 50 changes across all tables. Supports **Ctrl+Z / Cmd+Z**.
   - **Copy (📋)**: Instantly copies table data in TSV format, formatted to 3 decimal places for perfect spreadsheet integration.
   - **Clear (🗑)**: Resets the table data, clears heatmap colors, and wipes the corresponding 3D mesh.
 - **Linked Selections (Revise Tab)**: The "Source Table" and "Apply To" targets are linked—selecting a table to revise automatically prepares it for application, streamlining your workflow.
